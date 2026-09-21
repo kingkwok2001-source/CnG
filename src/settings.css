@@ -1,0 +1,13 @@
+.primary:disabled,.ghost:disabled,.danger:disabled{opacity:.55}
+.settings-card{display:grid;gap:6px;margin-bottom:14px}
+.settings-card small,.muted{color:#887a70}
+.settings-card b{overflow-wrap:anywhere}
+.muted{font-size:14px;line-height:1.55;margin:0}
+.section-title{margin:26px 2px 10px}
+.notice{min-height:44px;border-radius:15px;padding:11px 13px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
+.notice svg{width:19px}
+.notice.success{background:#e5f0e5;color:#477149}
+.notice.error{background:#f9e6e1;color:#a34336}
+.action-with-icon{display:flex;align-items:center;justify-content:center;gap:8px}
+.action-with-icon svg{width:20px}
+.form h3{margin:0}
