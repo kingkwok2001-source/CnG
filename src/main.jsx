@@ -34,8 +34,8 @@ function parseCsv(text){const rows=[];let row=[],cell='',quoted=false;for(let i=
 async function imageDataUrl(file){if(!file?.type.startsWith('image/'))throw new Error('請選擇圖片檔案');if(file.size>8*1024*1024)throw new Error('圖片不可超過 8MB');const src=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(file)}),img=await new Promise((ok,no)=>{const x=new Image();x.onload=()=>ok(x);x.onerror=no;x.src=src}),size=Math.min(512,Math.max(img.width,img.height)),scale=size/Math.max(img.width,img.height),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/jpeg',.82)}
 function printSummary(project,expenses,incomes){const total=expenses.reduce((n,e)=>n+Number(e.total_amount),0),paid=expenses.reduce((n,e)=>n+Number(e.paid_amount),0),income=incomes.reduce((n,e)=>n+Number(e.amount),0),groups=Object.values(expenses.reduce((a,e)=>{const name=e.categories?.name||'其他';a[name]??={name,total:0};a[name].total+=Number(e.total_amount);return a},{})).sort((a,b)=>b.total-a.total),win=window.open('','_blank');if(!win)return alert('瀏覽器阻擋咗列印視窗，請允許彈出視窗後再試。');win.opener=null;win.document.write(`<!doctype html><html lang="zh-HK"><head><meta charset="utf-8"><title>${project.name} 財務總覽</title><style>@page{size:A4;margin:18mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#302d2a;margin:0}header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #4e6258;padding-bottom:14px}h1{margin:0;font-size:26px}small{color:#827b72}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.stat{background:#f4f1eb;border-radius:12px;padding:14px}.stat b,.stat small{display:block}.stat b{font-size:17px;margin-top:7px}.due{color:#a65743}.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}h2{font-size:16px;margin:0 0 10px}.row{display:flex;justify-content:space-between;border-bottom:1px solid #e8e2da;padding:9px 0;font-size:12px}.bar{height:5px;background:#e9e4dc;border-radius:5px;margin-top:5px}.bar i{display:block;height:100%;background:#8fa58f;border-radius:5px}footer{margin-top:28px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:10px;text-align:right}@media print{button{display:none}}</style></head><body><header><div><small>PROJECT FINANCE</small><h1>${project.name}</h1></div><div>${new Date().toLocaleDateString('zh-HK')}</div></header><section class="stats"><div class="stat"><small>總支出</small><b>${money(total,project.currency)}</b></div><div class="stat"><small>已付款</small><b>${money(paid,project.currency)}</b></div><div class="stat"><small>尚欠</small><b class="due">${money(total-paid,project.currency)}</b></div><div class="stat"><small>總收入</small><b>${money(income,project.currency)}</b></div></section><div class="grid"><section><h2>分類開支</h2>${groups.slice(0,10).map(g=>`<div class="row"><span>${g.name}</span><b>${money(g.total,project.currency)}</b></div><div class="bar"><i style="width:${total?g.total/total*100:0}%"></i></div>`).join('')}</section><section><h2>最近支出</h2>${expenses.slice(0,12).map(e=>`<div class="row"><span>${e.title}<br><small>${e.expense_date||''}</small></span><span style="text-align:right"><b>${money(e.total_amount,project.currency)}</b><br><small>欠 ${money(e.outstanding_amount,project.currency)}</small></span></div>`).join('')}</section></div><footer>${expenses.length} 筆支出 · 由 Project Finance 產生</footer><script>setTimeout(()=>window.print(),300)<\/script></body></html>`);win.document.close()}
 function App(){
- const[session,setSession]=useState(null),[projects,setProjects]=useState([]),[project,setProject]=useState(null),[expenses,setExpenses]=useState([]),[incomes,setIncomes]=useState([]),[cats,setCats]=useState([]),[view,setView]=useState('home'),[sheet,setSheet]=useState(null),[loading,setLoading]=useState(true),[query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[selected,setSelected]=useState([]),[undo,setUndo]=useState(null),[toast,setToast]=useState(''),[guideOpen,setGuideOpen]=useState(false)
- useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const{data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
+ const[session,setSession]=useState(null),[recovering,setRecovering]=useState(()=>location.hash.includes('type=recovery')||location.search.includes('type=recovery')),[projects,setProjects]=useState([]),[project,setProject]=useState(null),[expenses,setExpenses]=useState([]),[incomes,setIncomes]=useState([]),[cats,setCats]=useState([]),[view,setView]=useState('home'),[sheet,setSheet]=useState(null),[loading,setLoading]=useState(true),[query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[selected,setSelected]=useState([]),[undo,setUndo]=useState(null),[toast,setToast]=useState(''),[guideOpen,setGuideOpen]=useState(false)
+ useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const{data}=supabase.auth.onAuthStateChange((event,s)=>{setSession(s);if(event==='PASSWORD_RECOVERY')setRecovering(true)});return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(session)loadProjects()},[session])
  useEffect(()=>{if(!session)return;const key=`project-finance-guide-v1:${session.user.id}`;if(!localStorage.getItem(key))setGuideOpen(true)},[session?.user?.id])
  useEffect(()=>{if(project){setFilter('all');setQuery('');setSelected([]);loadProject()}},[project?.id])
@@ -46,6 +46,7 @@ function App(){
  const incomeTotal=useMemo(()=>incomes.reduce((n,i)=>n+Number(i.amount),0),[incomes])
  const shown=expenses.filter(e=>(!query||e.title.toLowerCase().includes(query.toLowerCase()))&&(filter==='all'||(filter==='paid'?e.payment_status==='paid':e.payment_status!=='paid')))
  if(loading)return <main className="center"><div className="spinner"/></main>
+ if(recovering)return <Auth initialMode="reset" onReset={()=>setRecovering(false)}/>
  if(!session)return <Auth/>
  if(!project)return <><Global projects={projects} reload={loadProjects} open={p=>{setProject(p);setView('overview')}} add={()=>setSheet('project')} sheet={sheet} close={()=>setSheet(null)} view={view} setView={setView} session={session} openGuide={()=>setGuideOpen(true)}/>{guideOpen&&<UserGuide userId={session.user.id} close={()=>setGuideOpen(false)}/>}</>
  const nav=[['overview',Home,'總覽'],['ledger',BookOpen,'帳目'],...(project.income_enabled?[['income',Banknote,'收入']]:[]),['analytics',BarChart3,'分析'],['settings',Settings,'設定']]
@@ -65,8 +66,8 @@ function App(){
   {guideOpen&&<UserGuide userId={session.user.id} close={()=>setGuideOpen(false)}/>} 
  </main>
 }
-function Auth(){
- const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false),redirectTo='https://cng-finance.vercel.app/'
+function Auth({initialMode='login',onReset}){
+ const[mode,setMode]=useState(initialMode),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[confirmPassword,setConfirmPassword]=useState(''),[msg,setMsg]=useState(''),[tone,setTone]=useState(''),[busy,setBusy]=useState(false),[canResend,setCanResend]=useState(false),redirectTo='https://cng-finance.vercel.app/'
  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))
  async function request(action){
   try{return await action()}
@@ -76,24 +77,42 @@ function Auth(){
    return action()
   }
  }
- const friendly=e=>/load failed|failed to fetch|network/i.test(e?.message||'')?'暫時連唔到登入伺服器，已自動重試。請轉換 Wi-Fi／流動數據後再按一次。':(e?.message||'連線失敗，請稍後再試')
- async function go(signup=false){
-  if(!email.includes('@')||password.length<6){setMsg('請輸入有效電郵及最少 6 位密碼');return}
-  setBusy(true);setMsg(signup?'建立帳號中…':'登入中…')
+ const friendly=e=>{const m=e?.message||'';if(/invalid login credentials/i.test(m))return'電郵或密碼唔正確。唔記得密碼可按下方重設。';if(/email not confirmed/i.test(m))return'帳戶尚未驗證，請檢查電郵或重新寄驗證信。';if(/already registered|already exists/i.test(m))return'呢個電郵已經有帳戶，請直接登入或重設密碼。';if(/rate limit|too many/i.test(m))return'操作太頻密，請等一分鐘再試。';if(/load failed|failed to fetch|network/i.test(m))return'暫時連唔到登入伺服器，請轉換 Wi-Fi／流動數據後再試。';return m||'處理失敗，請稍後再試。'}
+ function switchMode(next){setMode(next);setMsg('');setTone('');setPassword('');setConfirmPassword('');setCanResend(false)}
+ async function submitAuth(){
+  const signup=mode==='signup'
+  if(!email.includes('@')||password.length<6){setTone('error');setMsg('請輸入有效電郵及最少 6 位密碼');return}
+  if(signup&&password!==confirmPassword){setTone('error');setMsg('兩次輸入嘅密碼唔一致');return}
+  setBusy(true);setTone('');setMsg(signup?'建立帳號中…':'登入中…')
   try{
    const r=await request(()=>signup?supabase.auth.signUp({email,password,options:{emailRedirectTo:redirectTo}}):supabase.auth.signInWithPassword({email,password}))
-   setMsg(r.error?r.error.message:(signup?'帳號已建立，請檢查電郵完成驗證。':'登入成功'))
-  }catch(e){setMsg(friendly(e))}finally{setBusy(false)}
+   if(r.error)throw r.error
+   setTone('success');setCanResend(signup&&!r.data.session);setMsg(signup?(r.data.session?'帳號已建立並成功登入。':'帳號已建立。請開啟確認電郵，完成後返嚟登入。'):'登入成功')
+  }catch(e){setTone('error');setMsg(friendly(e))}finally{setBusy(false)}
  }
  async function resend(){
   if(!email.includes('@')){setMsg('請先輸入你註冊用嘅電郵地址');return}
-  setBusy(true);setMsg('寄送中…')
+  setBusy(true);setTone('');setMsg('寄送中…')
   try{
    const{error}=await request(()=>supabase.auth.resend({type:'signup',email,options:{emailRedirectTo:redirectTo}}))
-   setMsg(error?error.message:'已重新寄出驗證電郵。請只開最新嗰封。')
-  }catch(e){setMsg(friendly(e))}finally{setBusy(false)}
+   if(error)throw error;setTone('success');setMsg('已重新寄出驗證電郵。請只開最新嗰封。')
+  }catch(e){setTone('error');setMsg(friendly(e))}finally{setBusy(false)}
  }
- return <main className="auth"><div className="brand"><div className="mark">PF</div><small>YOUR MONEY, MADE CLEAR</small><h1>每一筆，都清楚掌握。</h1><p>總額、已付、尚欠，一眼睇晒。</p></div><div className="auth-form"><h2>歡迎回來</h2><p>登入後繼續管理你嘅帳本</p><div className="form"><label>電郵<input value={email} onChange={e=>setEmail(e.target.value)} inputMode="email" autoComplete="email" placeholder="你的電郵地址"/></label><label>密碼<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="最少 6 位"/></label><button className="primary" disabled={busy} onClick={()=>go(false)}>{busy?'處理中…':'登入'}</button><button className="ghost" disabled={busy} onClick={()=>go(true)}>建立帳號</button><button className="ghost" disabled={busy} onClick={resend}>重新寄驗證電郵</button><small role="status">{msg}</small></div></div></main>
+ async function forgot(){
+  if(!email.includes('@')){setTone('error');setMsg('請先輸入你註冊用嘅電郵地址');return}
+  setBusy(true);setTone('');setMsg('寄送重設密碼電郵中…')
+  try{const{error}=await request(()=>supabase.auth.resetPasswordForEmail(email,{redirectTo}));if(error)throw error;setTone('success');setMsg('重設密碼電郵已寄出。請開最新嗰封電郵繼續。')}
+  catch(e){setTone('error');setMsg(friendly(e))}finally{setBusy(false)}
+ }
+ async function updatePassword(){
+  if(password.length<6){setTone('error');setMsg('新密碼最少要 6 位');return}
+  if(password!==confirmPassword){setTone('error');setMsg('兩次輸入嘅密碼唔一致');return}
+  setBusy(true);setTone('');setMsg('更新密碼中…')
+  try{const{error}=await supabase.auth.updateUser({password});if(error)throw error;setTone('success');setMsg('密碼已更新，正在進入帳戶…');setTimeout(()=>onReset?.(),700)}catch(e){setTone('error');setMsg(friendly(e))}finally{setBusy(false)}
+ }
+ const title=mode==='login'?'歡迎回來':mode==='signup'?'建立帳號':mode==='forgot'?'忘記密碼':mode==='reset'?'設定新密碼':''
+ const subtitle=mode==='login'?'登入後繼續管理你嘅帳本':mode==='signup'?'建立後請到電郵完成驗證':mode==='forgot'?'輸入註冊電郵，我哋會寄重設連結俾你':'請輸入一個新密碼'
+ return <main className="auth"><div className="brand"><div className="mark">PF</div><small>YOUR MONEY, MADE CLEAR</small><h1>每一筆，都清楚掌握。</h1><p>總額、已付、尚欠，一眼睇晒。</p></div><div className="auth-form"><div className="auth-heading"><div><h2>{title}</h2><p>{subtitle}</p></div>{mode==='forgot'&&<button className="auth-back" onClick={()=>switchMode('login')}>返回登入</button>}</div>{mode!=='forgot'&&mode!=='reset'&&<div className="auth-tabs" role="tablist"><button role="tab" aria-selected={mode==='login'} className={mode==='login'?'on':''} onClick={()=>switchMode('login')}>登入</button><button role="tab" aria-selected={mode==='signup'} className={mode==='signup'?'on':''} onClick={()=>switchMode('signup')}>建立帳號</button></div>}<div className="form">{mode!=='reset'&&<label>電郵<input value={email} onChange={e=>setEmail(e.target.value.trim())} inputMode="email" autoComplete="email" placeholder="你的電郵地址"/></label>}{mode!=='forgot'&&<label>{mode==='reset'?'新密碼':'密碼'}<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='login'?'current-password':'new-password'} placeholder="最少 6 位"/></label>}{(mode==='signup'||mode==='reset')&&<label>再次輸入密碼<input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" placeholder="再次輸入密碼"/></label>}{mode==='login'&&<button className="forgot-link" onClick={()=>switchMode('forgot')}>唔記得密碼？</button>}<button className="primary" disabled={busy} onClick={mode==='forgot'?forgot:mode==='reset'?updatePassword:submitAuth}>{busy?'處理中…':mode==='login'?'登入':mode==='signup'?'建立帳號':mode==='forgot'?'寄出重設電郵':'更新密碼'}</button>{canResend&&<button className="ghost" disabled={busy} onClick={resend}>未收到？重新寄驗證電郵</button>}{msg&&<div className={`auth-notice ${tone}`} role="status">{msg}</div>}</div></div></main>
 }
 function Global({projects,open,add,sheet,close,view,setView,session,reload,openGuide}){const settings=view==='globalSettings',avatar=session.user.user_metadata?.avatar_url;return <main className="finance-shell global-shell"><aside className="desktop-sidebar"><div className="sidebar-brand"><span className="sidebar-mark">PF</span><span>Project Finance<small>讓每筆數字更清楚</small></span></div><div className="sidebar-caption">工作空間</div><button className={`sidebar-link ${!settings?'active':''}`} onClick={()=>setView('home')}><Home/>我的帳本</button><button className={`sidebar-link ${settings?'active':''}`} onClick={()=>setView('globalSettings')}><Settings/>帳號設定</button><button className="sidebar-add" onClick={add}><Plus/>新增帳本</button><div className="sidebar-bottom">{session.user.email}</div></aside><header><div><small>PROJECT FINANCE</small><h2>{settings?'帳號設定':'我的帳本'}</h2></div><button className="avatar avatar-button" aria-label="開啟帳號設定" onClick={()=>setView('globalSettings')}>{avatar?<img src={avatar}/>:((session.user.email||'C')[0].toUpperCase())}</button></header><section className="page">{settings?<AccountSettings email={session.user.email} avatar={avatar} openGuide={openGuide}/>:<><div className="welcome"><span>所有帳本</span><button className="icon" onClick={add} aria-label="新增帳本"><Plus/></button></div><div className="project-grid">{projects.map(p=>{const rows=p.expense_financials||[],t=rows.reduce((a,e)=>({total:a.total+Number(e.total_amount),paid:a.paid+Number(e.paid_amount),due:a.due+Number(e.outstanding_amount)}),{total:0,paid:0,due:0});return <button className="project-card" onClick={()=>open(p)} key={p.id}><Logo p={p}/><div className="project-title"><b>{p.name}</b><small>{p.project_type} · {p.currency}</small></div><ChevronRight/><div className="big"><small>尚欠</small><strong>{money(t.due,p.currency)}</strong></div><div className="triple"><span>總額<b>{money(t.total,p.currency)}</b></span><span>已付<b>{money(t.paid,p.currency)}</b></span></div><progress value={t.paid} max={t.total||1}/></button>})}{!projects.length&&<div className="empty"><WalletCards/><h3>建立第一個帳本</h3><p>登入後資料會安全同步到所有裝置。</p><button className="primary" onClick={add}>新增帳本</button></div>}</div><JoinProject joined={async id=>{await reload();const{data:p}=await supabase.from('projects').select('*').eq('id',id).single();if(p)open(p)}}/></>}</section><nav><button className={!settings?'active':''} onClick={()=>{close();setView('home')}}><Home/>首頁</button><button onClick={add}><span className="add"><Plus/></span></button><button className={settings?'active':''} onClick={()=>{close();setView('globalSettings')}}><Settings/>設定</button></nav>{sheet&&<Sheet close={close}><NewProject close={close}/></Sheet>}</main>}
 function Logo({p}){return p.logo_url?<img className="logo" src={p.logo_url}/>:<div className="logo fallback">{p.project_type==='wedding'?'CG':'PF'}</div>}
