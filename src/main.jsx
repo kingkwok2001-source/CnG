@@ -66,7 +66,7 @@ function App(){
  </main>
 }
 function Auth(){
- const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false),redirectTo=`${window.location.origin}/`
+ const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false),redirectTo='https://cng-finance.vercel.app/'
  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))
  async function request(action){
   try{return await action()}
