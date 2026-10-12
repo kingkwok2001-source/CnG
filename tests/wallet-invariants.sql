@@ -1,0 +1,44 @@
+-- Disposable fixtures in a transaction. Always roll back, including on failure.
+begin;
+select set_config('request.jwt.claim.sub',(select owner_id::text from public.projects limit 1),true);
+set local role authenticated;
+do $$
+declare uid uuid:=auth.uid(); p uuid:=gen_random_uuid(); p2 uuid:=gen_random_uuid();
+ bank uuid:=gen_random_uuid(); octopus uuid:=gen_random_uuid(); foreign_wallet uuid:=gen_random_uuid(); d uuid:=gen_random_uuid();
+ answer jsonb; first_answer jsonb; failed boolean; total numeric;
+begin
+ insert into public.projects(id,owner_id,name,project_type,currency) values(p,uid,'Test rollback','daily','HKD'),(p2,uid,'Other test rollback','daily','HKD');
+ insert into public.finance_wallets(id,project_id,name,opening_balance) values(bank,p,'Bank',1000),(octopus,p,'Octopus',0),(foreign_wallet,p2,'Other',1000);
+ first_answer:=public.finance_money_write(p,'test-transfer-001','transfer',jsonb_build_object('amount',500,'date','2026-10-11','wallet_id',bank,'destination_id',octopus));
+ answer:=public.finance_money_write(p,'test-transfer-001','transfer',jsonb_build_object('amount',500,'date','2026-10-11','wallet_id',bank,'destination_id',octopus));
+ if answer<>first_answer or (select count(*) from public.finance_wallet_entries where project_id=p)<>2 then raise exception 'Transfer retry duplicated'; end if;
+ if exists(select 1 from public.expenses where project_id=p) then raise exception 'Topup became expense'; end if;
+ insert into public.finance_drafts(id,project_id,title,amount,method) values(d,p,'Restaurant',128,'八達通');
+ first_answer:=public.finance_money_write(p,'test-confirm-001','expense',jsonb_build_object('draft_id',d,'amount',128,'date','2026-10-11','wallet_id',octopus,'title','Restaurant','method','八達通'));
+ answer:=public.finance_money_write(p,'test-confirm-001','expense',jsonb_build_object('draft_id',d,'amount',128,'date','2026-10-11','wallet_id',octopus,'title','Restaurant','method','八達通'));
+ if answer<>first_answer or (select count(*) from public.expenses where project_id=p)<>1 then raise exception 'Expense retry duplicated'; end if;
+ select balance into total from public.finance_wallet_balances where id=octopus;
+ if total<>372 then raise exception 'Balance wrong: %',total; end if;
+ if (select status from public.finance_drafts where id=d)<>'confirmed' then raise exception 'Draft not consumed'; end if;
+ failed:=false;
+ begin perform public.finance_money_write(p,'test-confirm-002','expense',jsonb_build_object('draft_id',d,'amount',128,'date','2026-10-11','title','Restaurant')); exception when others then failed:=true; end;
+ if not failed then raise exception 'Confirmed draft accepted twice'; end if;
+ failed:=false;
+ begin perform public.finance_money_write(p,'test-transfer-002','transfer',jsonb_build_object('amount',1000,'date','2026-10-11','wallet_id',octopus,'destination_id',bank)); exception when others then failed:=true; end;
+ if not failed then raise exception 'Insufficient balance accepted'; end if;
+ failed:=false;
+ begin perform public.finance_money_write(p,'test-transfer-003','transfer',jsonb_build_object('amount',10,'date','2026-10-11','wallet_id',bank,'destination_id',foreign_wallet)); exception when others then failed:=true; end;
+ if not failed then raise exception 'Foreign project wallet accepted'; end if;
+ failed:=false;
+ begin insert into public.finance_wallet_entries(project_id,wallet_id,amount,title) values(p,bank,9999,'Forge'); exception when insufficient_privilege then failed:=true; end;
+ if not failed then raise exception 'Direct ledger write allowed'; end if;
+ perform set_config('request.jwt.claim.sub',gen_random_uuid()::text,true);
+ if exists(select 1 from public.finance_wallets where project_id=p) or exists(select 1 from public.finance_drafts where project_id=p) then raise exception 'Outsider read allowed'; end if;
+ failed:=false;
+ begin perform public.finance_money_write(p,'test-outsider-001','expense',jsonb_build_object('amount',10,'date','2026-10-11','title','Forge')); exception when others then failed:=true; end;
+ if not failed then raise exception 'Outsider write allowed'; end if;
+ perform set_config('request.jwt.claim.sub',uid::text,true);
+ if (select count(*) from public.expenses where project_id=p)<>1 or (select count(*) from public.finance_wallet_entries where project_id=p)<>3 then raise exception 'Failed write partially committed'; end if;
+ raise notice 'PASS: transfer, retry, draft, balance, atomicity and access control';
+end $$;
+rollback;
