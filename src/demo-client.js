@@ -2,6 +2,7 @@
 import {parseTransaction} from './transaction-parser'
 const data={finance_wallet_balances:[{id:'bank',name:'銀行',opening_balance:1000,balance:500},{id:'octopus',name:'八達通',opening_balance:0,balance:372}],finance_wallet_entries:[{id:'e1',wallet_id:'octopus',amount:-128,title:'餐廳',entry_date:'2026-10-11'}],finance_drafts:[{id:'draft',title:'餐廳',amount:128,method:'PayMe',transaction_date:'2026-10-11',source:'screenshot',raw_text:'收款人：餐廳\nHK$128.00\n2026-10-11\nPayMe'}]}
 export const demoClient={
+ isDemo:true,
  from(table){let inserted;const q={select(){return q},eq(){return q},order(){return q},limit(){return q},insert(row){inserted=row;return q},then(resolve){if(inserted){if(table==='finance_wallets')data.finance_wallet_balances.push({...inserted,balance:inserted.opening_balance});else{data[table]??=[];data[table].push(inserted)}}return Promise.resolve({data:data[table]||[],error:null}).then(resolve)}};return q},
  channel(){const ch={on(){return ch},subscribe(){return ch}};return ch},removeChannel(){},
  async rpc(name,args){

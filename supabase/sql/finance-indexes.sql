@@ -1,0 +1,13 @@
+create index if not exists finance_drafts_author_recent_idx on public.finance_drafts(created_by,source,created_at);
+create index if not exists finance_drafts_expense_idx on public.finance_drafts(expense_id);
+create index if not exists finance_shortcut_user_idx on public.finance_shortcut_keys(user_id);
+create index if not exists finance_wallet_entry_wallet_idx on public.finance_wallet_entries(wallet_id,project_id);
+create index if not exists finance_request_user_idx on public.finance_write_requests(user_id);
+create index if not exists attachments_expense_project_idx on public.attachments(expense_id,project_id);
+create index if not exists attachments_income_project_idx on public.attachments(income_id,project_id);
+create index if not exists attachments_payment_project_idx on public.attachments(payment_id,project_id);
+create index if not exists expenses_category_project_idx on public.expenses(category_id,project_id);
+create index if not exists payments_expense_project_idx on public.payments(expense_id,project_id);
+alter policy draft_create on public.finance_drafts with check(private.project_access(project_id,true) and created_by=(select auth.uid()) and status='pending' and expense_id is null);
+alter policy request_insert on public.finance_write_requests with check(user_id=(select auth.uid()) and private.project_access(project_id,true));
+alter policy request_update on public.finance_write_requests using(user_id=(select auth.uid()) and private.project_access(project_id,true)) with check(user_id=(select auth.uid()) and private.project_access(project_id,true));
