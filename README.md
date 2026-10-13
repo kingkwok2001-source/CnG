@@ -4,6 +4,8 @@ Payment Tracker / Balance Tracker for C&G Wedding and future projects.
 
 ## Current release
 
+- Auth screens now support Enter submission, accessible password visibility, persisted resend cooldowns and specific SMTP/rate-limit notices. Signup transitions into email verification. Expired callback links are handled without entering password-change mode; completed recovery removes the callback from the URL. Google OAuth is shown only when the live backend reports its provider enabled. This prepares the frontend but does not enable the provider or certify SMTP delivery.
+
 - Smart capture: on-device English/Traditional Chinese OCR, pasted payment text, shared pending inbox and explicit confirmation. OCR is lazy-loaded; the first use downloads public OCR runtime/language files. No screenshot is sent to an OCR service.
 - Payment methods include PayMe, Alipay, Octopus, Apple Pay, Jockey Club, cash and bank transfer. These are bookkeeping labels, not direct connections to those financial services.
 - Project wallets with opening balances, atomic transfers/top-ups and balance-aware paid expense capture. Top-ups are excluded from expense totals. Existing expenses are not retroactively deducted from wallets.
