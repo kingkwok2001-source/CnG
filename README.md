@@ -21,6 +21,8 @@ Applied additive SQL is recorded in `supabase/sql/wallets-and-inbox.sql`, `proje
 
 ## Verification
 
+The October 13 sync repair names the composite category/payment relationships explicitly. The earlier unqualified joins returned `PGRST201` after project-boundary constraints were added. Read failures now retain the last successful data with an actionable retry notice, and a successful refresh clears the notice. `tests/finance-sync-api.test.js` is a read-only live Data API regression, using the public URL/key environment variables; it verifies relationship resolution and anonymous RLS together.
+
 `node --test tests/transaction-parser.test.js` checks parsing ambiguity and impossible dates. `tests/wallet-invariants.sql` verifies retries, atomicity, transfers, draft confirmation and access under `authenticated`, using generated fixtures and a final rollback. `tests/shortcut-key.sql` verifies client permissions and key creation/revocation. `npm run build` checks the shipped bundle.
 
 ## Remaining platform work
