@@ -1,0 +1,10 @@
+// Isolated, disposable UI demo. No production Auth, Database or Storage calls.
+export function createPaymentDemoClient(){
+ const data={payments:[{id:'sample-payment',project_id:'proof-demo',expense_id:'proof-expense',amount:1000,paid_at:'2026-10-17',method:'銀行轉帳',notes:'示範首期付款'}],attachments:[]},objects=new Map(),receipts=new Map()
+ const client={isDemo:true,from(table){let operation='select',row,filters=[];const q={select(){return q},eq(key,value){filters.push([key,value]);return q},insert(value){operation='insert';row=value;return q},delete(){operation='delete';return q},maybeSingle(){q.single=true;return q},then(resolve){let rows=(data[table]||[]).filter(r=>filters.every(([k,v])=>r[k]===v));if(operation==='insert'){if(data[table].some(r=>r.id===row.id))return Promise.resolve({error:{code:'23505'}}).then(resolve);data[table].push({...row});rows=[row]}if(operation==='delete'){data[table]=data[table].filter(r=>!rows.includes(r));if(table==='payments')data.attachments=data.attachments.filter(a=>!rows.some(p=>p.id===a.payment_id))}return Promise.resolve({data:q.single?rows[0]||null:rows,error:null}).then(resolve)}};return q},
+ async rpc(name,args){if(receipts.has(args.p_request))return {data:receipts.get(args.p_request),error:null};const id=crypto.randomUUID();data.payments.push({id,project_id:args.p_project,...args.p_payload});const result={payment_id:id};receipts.set(args.p_request,result);return {data:result,error:null}},
+ storage:{from(){return {async upload(path,file){if(objects.has(path))return{error:{statusCode:'409'}};objects.set(path,{file,url:URL.createObjectURL(file)});return{error:null}},async remove(paths){for(const path of paths){const value=objects.get(path);if(value)URL.revokeObjectURL(value.url);objects.delete(path)}return{data:[],error:null}},async createSignedUrl(path){const item=objects.get(path);return item?{data:{signedUrl:item.url},error:null}:{error:{message:'檔案不存在'}}}}}},
+ snapshot(){return{payments:data.payments.map(x=>({...x})),files:data.attachments.map(x=>({...x}))}}
+ }
+ return client
+}

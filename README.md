@@ -4,6 +4,11 @@ Payment Tracker / Balance Tracker for C&G Wedding and future projects.
 
 ## Current release
 
+- Payment proofs: optional camera/photo/PDF selection (10 files, 10MB each), local preview/removal before submission, private full-screen signed previews, compact payment history thumbnails and payment detail. The existing `attachments.payment_id` one-to-many relationship is reused. Payment and expense attachments are displayed separately.
+- Payments commit before uploads. Stable payment request IDs and per-file IDs make retries safe; registration failures compensate uploads when the result is known. Deleted attachment rows queue their exact Storage paths transactionally, including cascaded payment deletes. The existing ten-minute worker deletes files with the Storage API. Unregistered payment paths older than one hour are swept; finalization is limited to the first thirty minutes to avoid cleanup/finalization races.
+- `supabase/sql/payment-attachments.sql` has been applied to production once. It preserves the existing one-parent and project constraints, adds guarded upload paths and cleanup, and returns `payment_id`/saves notes from `finance_write`. Do not reapply it.
+- `/?demo=payments` demonstrates the actual payment components with disposable in-page data. Refresh resets its demonstration files. The live integration runner in `tests/payment-proofs-live.ts` was authenticated with the existing cleanup mechanism, used only generated fixture users/projects, and was disabled after verification.
+
 - Auth screens now support Enter submission, accessible password visibility, persisted resend cooldowns and specific SMTP/rate-limit notices. Signup transitions into email verification. Expired callback links are handled without entering password-change mode; completed recovery removes the callback from the URL. Google OAuth is shown only when the live backend reports its provider enabled. This prepares the frontend but does not enable the provider or certify SMTP delivery.
 
 - Smart capture: on-device English/Traditional Chinese OCR, pasted payment text, shared pending inbox and explicit confirmation. OCR is lazy-loaded; the first use downloads public OCR runtime/language files. No screenshot is sent to an OCR service.

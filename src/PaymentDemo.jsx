@@ -1,0 +1,5 @@
+import React,{useRef,useState} from 'react'
+import {PaymentComposer,PaymentHistory} from './PaymentProofs'
+import {createPaymentDemoClient} from './payment-demo-client'
+const project={id:'proof-demo',currency:'HKD'},expense={id:'proof-expense',outstanding_amount:5000}
+export default function PaymentDemo(){const[client]=useState(createPaymentDemoClient),[data,setData]=useState(()=>client.snapshot()),[generation,setGeneration]=useState(0),[detail,setDetail]=useState(false);async function refresh(){setData(client.snapshot())}return <main className="payment-proof-demo"><a href="/">返回正式 App</a><h2>付款證明操作示範</h2><p className="notice">呢度係獨立示範，檔案只暫存喺此頁面。重新載入會清除示範；唔會存入你嘅帳本。</p><div hidden={detail}><PaymentComposer key={generation} project={project} expense={expense} client={client} done={async()=>{await refresh();setGeneration(x=>x+1)}}/></div><PaymentHistory payments={data.payments} files={data.files} project={project} expenseId={expense.id} client={client} reload={refresh} onDetailChange={setDetail}/></main>}
