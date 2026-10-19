@@ -1,0 +1,5 @@
+import React,{useState} from 'react'
+import {summaryHtml,printSummary} from './print-summary'
+import './summary-demo.css'
+const expenses=[{title:'場地訂金',expense_date:'2026-10-19',total_amount:10000,paid_amount:3000,outstanding_amount:7000,categories:{name:'場地及餐飲'}},{title:'攝影',expense_date:'2026-10-19',total_amount:5000,paid_amount:5000,outstanding_amount:0,categories:{name:'攝影及錄影'}}],incomes=[{amount:20000}]
+export default function SummaryDemo(){const[income,setIncome]=useState(false),project={name:'財務總覽示範',currency:'HKD',income_enabled:income};return <main className="summary-demo"><a href="/">返回正式 App</a><h1>PDF 總覽示範</h1><p>使用示範資料，切換收入模組可以比較實際列印版面。你的帳本未有改動。</p><label className="summary-switch"><input type="checkbox" checked={income} onChange={e=>setIncome(e.target.checked)}/>啟用收入模組</label><button type="button" className="primary" onClick={()=>printSummary(project,expenses,incomes)}>列印示範／儲存 PDF</button><iframe title="財務總覽列印預覽" sandbox="" srcDoc={summaryHtml(project,expenses,incomes)}/></main>}

@@ -4,6 +4,10 @@ Payment Tracker / Balance Tracker for C&G Wedding and future projects.
 
 ## Current release
 
+- Installable web app: standalone manifest, 192/512px icons, maskable icon and Apple touch icon. Reopenable iPhone/Android install instructions are available on login and account/project settings. Supported browsers can show their native PWA install prompt. The same account and backend are used; installing does not import or copy ledgers.
+- The service worker caches only public icons and an offline recovery page. API/auth/signed attachments and app HTML are never cached by this worker. Bookkeeping still requires a network connection; this is not offline editing or an App Store/Google Play native release.
+- Print-to-PDF now respects the project's income toggle and uses three expense metrics when income is off. The renderer's print script closing tag is corrected. `/?demo=summary` shows the actual print renderer with disposable fixtures and an income toggle.
+
 - Payment proofs: optional camera/photo/PDF selection (10 files, 10MB each), local preview/removal before submission, private full-screen signed previews, compact payment history thumbnails and payment detail. The existing `attachments.payment_id` one-to-many relationship is reused. Payment and expense attachments are displayed separately.
 - Payments commit before uploads. Stable payment request IDs and per-file IDs make retries safe; registration failures compensate uploads when the result is known. Deleted attachment rows queue their exact Storage paths transactionally, including cascaded payment deletes. The existing ten-minute worker deletes files with the Storage API. Unregistered payment paths older than one hour are swept; finalization is limited to the first thirty minutes to avoid cleanup/finalization races.
 - `supabase/sql/payment-attachments.sql` has been applied to production once. It preserves the existing one-parent and project constraints, adds guarded upload paths and cleanup, and returns `payment_id`/saves notes from `finance_write`. Do not reapply it.
