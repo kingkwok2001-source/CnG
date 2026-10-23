@@ -29,13 +29,17 @@ export async function savePaymentProofs(client,context,items,onProgress=()=>{}){
   if(!data?.payment_id)throw new Error('付款回應缺少 ID，請重新整理確認付款紀錄')
   context.paymentId=data.payment_id;onProgress()
  }
- const parent=await client.from('payments').select('id').eq('project_id',context.projectId).eq('id',context.paymentId).maybeSingle()
+ return saveLinkedProofs(client,context,items,onProgress,'payment')
+}
+export async function saveLinkedProofs(client,context,items,onProgress=()=>{},kind='payment'){
+ const isPayment=kind==='payment',parentId=isPayment?context.paymentId:context.expenseId,label=isPayment?'付款':'支出'
+ const parent=await client.from(isPayment?'payments':'expenses').select(isPayment?'id':'id,deleted_at').eq('project_id',context.projectId).eq('id',parentId).maybeSingle()
  if(parent.error)throw parent.error
- if(!parent.data)throw new Error('呢筆付款已不存在，附件未有上載')
+ if(!parent.data||parent.data.deleted_at)throw new Error(`呢筆${label}已不存在，附件未有上載`)
  const failures=[]
  for(const item of items){
   if(item.saved)continue
-  const path=attachmentPath(context.projectId,context.paymentId,item),row={id:item.id,project_id:context.projectId,payment_id:context.paymentId,storage_path:path,file_name:item.file.name,mime_type:item.file.type}
+  const path=isPayment?attachmentPath(context.projectId,parentId,item):`${context.projectId}/${parentId}/${item.id}.${mimeExtensions[item.file.type]||'jpg'}`,row={id:item.id,project_id:context.projectId,[isPayment?'payment_id':'expense_id']:parentId,storage_path:path,file_name:item.file.name,mime_type:item.file.type}
   item.status='上載中';onProgress()
   try{
    const upload=await client.storage.from(attachmentBucket).upload(path,item.file,{contentType:item.file.type,upsert:false})
@@ -43,17 +47,17 @@ export async function savePaymentProofs(client,context,items,onProgress=()=>{}){
    const registered=await client.from('attachments').insert(row)
    if(registered.error){
     // A lost response may hide a successful insert. Verify before compensating.
-    const existing=await client.from('attachments').select('id,payment_id,storage_path').eq('id',item.id).maybeSingle()
+    const existing=await client.from('attachments').select('id,payment_id,expense_id,storage_path').eq('id',item.id).maybeSingle()
     if(existing.error)throw existing.error
     if(!existing.data){await client.storage.from(attachmentBucket).remove([path]);throw registered.error}
-    if(existing.data.payment_id!==context.paymentId||existing.data.storage_path!==path)throw new Error('附件資料不一致')
+    if(existing.data[isPayment?'payment_id':'expense_id']!==parentId||existing.data.storage_path!==path)throw new Error('附件資料不一致')
    }
    item.saved=true;item.status='已儲存';item.error=''
   }catch(error){item.status='未完成';item.error=error.message||'上載失敗';failures.push(item)}
   onProgress()
  }
- if(failures.length)throw new Error(`付款已儲存，${failures.length} 個附件未完成。按「新增付款」只會重試附件，唔會重複扣帳。`)
- return context.paymentId
+ if(failures.length)throw new Error(`${label}已儲存，${failures.length} 個附件未完成。重試只會繼續附件，唔會重複記帳。`)
+ return parentId
 }
 export async function removePaymentAttachment(client,file){
  const{data,error}=await client.from('attachments').delete().eq('project_id',file.project_id).eq('id',file.id).select('id')
