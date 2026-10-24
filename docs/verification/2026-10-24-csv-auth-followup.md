@@ -27,4 +27,6 @@ Google provider 仍未啟用。現有工具沒有 SMTP／Google OAuth 管理設�
 
 ## 發佈及清理
 
-正式站重跑與測試資料清理結果在完成後補記。
+功能 release `b69be19` 已推送 main，GitHub Vercel status=success；正式程式 `/assets/index-C9xslW4T.js` 與本機 build 一致。正式站重跑真實 CSV 匯入／防重複及攔截 email POST 的 Auth UI 測試均通過。附件重試回歸兩組仍通過。
+
+專用 CSV 測試帳號及全部測試帳本已經由原有 delete-account 清理，cleanup_pending=false；原有 3 用戶、23 支出、25 付款、4 附件、4 Storage 檔案維持，測試用戶為零。
