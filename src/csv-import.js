@@ -33,13 +33,13 @@ export function parseExpenseCsv(text){
  const index=Object.fromEntries(headers.map((h,i)=>[h,i])),errors=[],rows=[]
  for(const [n,r] of parsed.slice(1).entries()){
   const line=n+2
-  if(r.length!==headers.length){errors.push(`第 ${line} 行：欄位數量與標題不同`);continue}
+  if(r.length!==headers.length){errors.push(`第 ${line-1} 筆：欄位數量與標題不同`);continue}
   const value=key=>r[index[key]]||'',item={line,date:value('日期'),category:value('分類')||'其他',title:value('項目'),total:money(value('總金額')),paid:money(value('已付'),true),dueDate:value('到期日'),person:value('負責人'),notes:value('備註')}
-  if(!validDate(item.date))errors.push(`第 ${line} 行：日期請用有效 YYYY-MM-DD`)
-  if(item.dueDate&&!validDate(item.dueDate))errors.push(`第 ${line} 行：到期日無效`)
-  if(!item.title)errors.push(`第 ${line} 行：缺少項目`)
-  if(!Number.isFinite(item.total)||item.total<=0)errors.push(`第 ${line} 行：總金額無效（最多兩位小數）`)
-  if(!Number.isFinite(item.paid)||item.paid<0||item.paid>item.total)errors.push(`第 ${line} 行：已付金額無效（最多兩位小數，不可大過總額）`)
+  if(!validDate(item.date))errors.push(`第 ${line-1} 筆：日期請用有效 YYYY-MM-DD`)
+  if(item.dueDate&&!validDate(item.dueDate))errors.push(`第 ${line-1} 筆：到期日無效`)
+  if(!item.title)errors.push(`第 ${line-1} 筆：缺少項目`)
+  if(!Number.isFinite(item.total)||item.total<=0)errors.push(`第 ${line-1} 筆：總金額無效（最多兩位小數）`)
+  if(!Number.isFinite(item.paid)||item.paid<0||item.paid>item.total)errors.push(`第 ${line-1} 筆：已付金額無效（最多兩位小數，不可大過總額）`)
   rows.push(item)
  }
  return {rows,errors}

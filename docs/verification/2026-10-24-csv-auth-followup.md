@@ -15,7 +15,7 @@
 
 真實 UI／正式 Supabase（合成帳號）：五類錯誤檔案不能提交、DB 零新增；有效兩筆 CSV（含 quoted newline、中文、千位及小數）兩次提交仍只有兩筆支出、一筆付款 $20.50，總額 $1,200.50 不變。只測專用合成帳本。
 
-獨立 code review 無 Critical／Important；Minor 保留：錯誤的「行」編號是邏輯紀錄位置，含空行或 multiline quoted field 時不是檔案實體行號。
+獨立 code review 無 Critical／Important；原 Minor 已修正：錯誤位置顯示「第 N 筆」，明確指資料紀錄序號，不再誤稱檔案實體行號。
 
 ## Auth 畫面補驗
 
