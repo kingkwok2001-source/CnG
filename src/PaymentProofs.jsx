@@ -1,9 +1,9 @@
-import React,{useContext,useEffect,useRef,useState} from 'react'
+import {useFormLeaveGuard} from './useFormLeaveGuard'
+import React,{useEffect,useRef,useState} from 'react'
 import {createPortal} from 'react-dom'
 import {ArrowLeft,Camera,ChevronRight,Download,FileText,Paperclip,Plus,Trash2,X} from 'lucide-react'
 import {supabase} from './supabase'
 import {paymentMethods,localToday,validDate} from './transaction-parser'
-import {SheetCloseContext} from './SheetCloseContext'
 import {attachmentBucket,maxPaymentFiles,preparePaymentFile,savePaymentProofs,removePaymentAttachment,removePayment} from './payment-files'
 import './payment-proofs.css'
 const money=(value,currency)=>new Intl.NumberFormat('zh-HK',{style:'currency',currency}).format(Number(value))
@@ -23,10 +23,10 @@ export function ProofThumb({file,client,open}){const{url,error}=useSignedFile(cl
 
 export function PaymentComposer({project,expense,client=supabase,done}){
  const[amount,setAmount]=useState(''),[paidAt,setPaidAt]=useState(localToday()),[method,setMethod]=useState(''),[notes,setNotes]=useState(''),[items,setItems]=useState([]),[viewer,setViewer]=useState(null),[busy,setBusy]=useState(false),[preparing,setPreparing]=useState(false),[error,setError]=useState(''),[,render]=useState(0)
- const context=useRef({projectId:project.id,requestId:crypto.randomUUID(),paymentId:null}),saving=useRef(false),selected=useRef(items),pick=useRef(null),camera=useRef(null),guard=useContext(SheetCloseContext),mounted=useRef(true)
+ const context=useRef({projectId:project.id,requestId:crypto.randomUUID(),paymentId:null}),saving=useRef(false),selected=useRef(items),pick=useRef(null),camera=useRef(null),mounted=useRef(true)
  selected.current=items
  useEffect(()=>()=>{mounted.current=false;for(const item of selected.current)URL.revokeObjectURL(item.url)},[])
- useEffect(()=>{if(!guard)return;guard.current=()=>{if(saving.current||preparing)return false;const pending=selected.current.some(x=>!x.saved);return !pending||confirm(context.current.paymentId?'付款已儲存，部分附件未完成。關閉會放棄未上載附件，是否繼續？':'未送出嘅付款證明會被移除，確定關閉？')};return()=>{guard.current=null}},[guard,preparing])
+ useFormLeaveGuard({values:[amount,paidAt,method,notes],busy:busy||preparing,pending:items.some(x=>!x.saved),committed:!!context.current.paymentId,message:context.current.paymentId?'付款已儲存，離開會放棄未上載附件，繼續？':'表格有未儲存付款資料或附件，確定離開？'})
  const progress=()=>{if(mounted.current)render(x=>x+1)}
  async function choose(files){
   if(preparing||saving.current)return;setPreparing(true);setError('')
@@ -38,13 +38,13 @@ export function PaymentComposer({project,expense,client=supabase,done}){
  async function submit(event){
   event.preventDefault();if(saving.current||preparing)return
   if(!context.current.paymentId&&(!Number.isFinite(Number(amount))||Number(amount)<=0||!validDate(paidAt))){setError('請輸入有效付款金額及日期');return}
-  saving.current=true;setBusy(true);setError('')
+  saving.current=true;context.current.started=true;setBusy(true);setError('')
   if(!context.current.payload)context.current.payload={expense_id:expense.id,amount:Number(amount),paid_at:paidAt,method:method||null,notes:notes.trim()||null}
   try{await savePaymentProofs(client,context.current,items,progress);await done()}
   catch(e){setError((context.current.paymentId&&!e.message.startsWith('付款已儲存')?'付款已儲存，附件未完成。重試唔會重複記帳。 ':'')+e.message);if(!context.current.paymentId)setError(e.message)}
   finally{saving.current=false;if(mounted.current)setBusy(false)}
  }
- const locked=busy||!!context.current.paymentId
+ const locked=busy||!!context.current.started
  return <form className="form compact payment-composer" onSubmit={submit}><h3>新增付款</h3><label>金額<input disabled={locked} inputMode="decimal" value={amount} onChange={e=>{context.current.payload=null;setAmount(e.target.value)}} placeholder={money(expense.outstanding_amount,project.currency)}/></label><div className="two-fields"><label>日期<input disabled={locked} type="date" value={paidAt} onChange={e=>{context.current.payload=null;setPaidAt(e.target.value)}}/></label><label>方式<select disabled={locked} value={method} onChange={e=>{context.current.payload=null;setMethod(e.target.value)}}><option value="">選擇方式</option>{paymentMethods.map(m=><option key={m}>{m}</option>)}</select></label></div><label>備註（選填）<input disabled={locked} value={notes} onChange={e=>{context.current.payload=null;setNotes(e.target.value)}} placeholder="例如：第二期訂金"/></label><div className="proof-picker"><b>附件／付款證明 <small>選填</small></b><div className="proof-picker-actions"><button type="button" className="ghost" disabled={busy||preparing||items.length>=maxPaymentFiles} onClick={()=>pick.current.click()}><Plus/>加入付款證明</button><button type="button" className="ghost camera-proof" disabled={busy||preparing||items.length>=maxPaymentFiles} onClick={()=>camera.current.click()}><Camera/>拍照</button></div><input hidden ref={pick} aria-label="選擇付款證明檔案" type="file" accept="image/*,application/pdf,.pdf" multiple onChange={e=>{choose(e.target.files);e.target.value=''}}/><input hidden ref={camera} aria-label="拍攝付款證明" type="file" accept="image/*" capture="environment" onChange={e=>{choose(e.target.files);e.target.value=''}}/><small className="proof-hint">相片或 PDF，每個最多 10MB，最多 10 個。按「新增付款」後先上載。</small>{preparing&&<p role="status">準備本機預覽…</p>}<div className="selected-proofs">{items.map(item=><div className="selected-proof" key={item.id}><button type="button" className="proof-thumb" aria-label={'預覽 '+item.file.name} onClick={()=>setViewer(item)}>{item.file.type.startsWith('image/')?<img src={item.url} alt=""/>:<FileText/>}</button>{!item.saved&&<button type="button" className="remove-proof" aria-label={'移除 '+item.file.name} disabled={busy} onClick={()=>{URL.revokeObjectURL(item.url);setItems(old=>old.filter(x=>x.id!==item.id))}}><X/></button>}<small>{item.file.name}</small>{item.status&&<small className={item.error?'proof-error':''}>{item.status}</small>}</div>)}</div></div>{error&&<div className="notice error" role="alert">{error}</div>}<button type="submit" className="primary" disabled={busy||preparing}>{busy?'儲存中…':'新增付款'}</button>{context.current.paymentId&&!busy&&<p className="proof-hint">付款已建立，按上方按鈕會繼續未完成附件。</p>}{viewer&&<ProofViewer file={viewer} client={client} close={()=>setViewer(null)}/>}</form>
 }
 

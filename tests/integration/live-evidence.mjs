@@ -1,0 +1,39 @@
+// Dedicated disposable users only; never run using a real user's credentials.
+// FINANCE_TEST_CREDENTIALS points to private {url,key,password,users:[{id,email},...]}.
+import fs from 'node:fs'
+import path from 'node:path'
+import assert from 'node:assert/strict'
+import evidence from '../fixtures/evidence.cjs'
+import {createClient} from '@supabase/supabase-js'
+import {savePaymentProofs,saveLinkedProofs,removePaymentAttachment,removePayment,attachmentBucket} from '../../src/payment-files.js'
+import {saveReceiptBatch} from '../../src/receipt-batch.js'
+const cfg=JSON.parse(fs.readFileSync(process.env.FINANCE_TEST_CREDENTIALS,'utf8'))
+const artifactDir=process.env.FINANCE_TEST_ARTIFACT_DIR||path.dirname(process.env.FINANCE_TEST_CREDENTIALS)
+assert.ok(cfg.users.every(u=>u.email.endsWith('@example.invalid')),'Disposable users required')
+const clients=cfg.users.map(()=>createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false}}))
+const ok=result=>{assert.equal(result.error,null,result.error?.message);return result.data}
+const item=name=>({id:crypto.randomUUID(),file:new File([evidence.file(name).buffer],name,{type:evidence.file(name).mimeType}),saved:false})
+const projects=[],paths=[]
+try{
+for(const [i,c] of clients.entries())ok(await c.auth.signInWithPassword({email:cfg.users[i].email,password:cfg.password}))
+for(const [i,c] of [[0,clients[0]],[0,clients[0]],[1,clients[1]]])projects.push(ok(await c.from('projects').insert({owner_id:cfg.users[i].id,name:'Acceptance synthetic '+crypto.randomUUID()}).select().single()))
+fs.writeFileSync(path.join(artifactDir,'live-fixtures.json'),JSON.stringify({projects:projects.map(p=>p.id)}),{mode:0o600})
+const c=clients[0],pid=projects[0].id;
+const request=crypto.randomUUID(),payload={title:'Synthetic multiple evidence',total_amount:350,paid:0,expense_date:'2026-10-24'}
+const created=ok(await c.rpc('finance_write',{p_project:pid,p_request:request,p_kind:'expense',p_payload:payload}));assert.ok(created.expense_id)
+assert.deepEqual(ok(await c.from('attachments').select('*').eq('project_id',pid)),[])
+console.log('PASS no-attachment expense')
+const proofs=['one.png','two.png','proof.pdf'].map(item),context={projectId:pid,expenseId:created.expense_id};
+await saveLinkedProofs(c,context,proofs,()=>{},'expense');let files=ok(await c.from('attachments').select('*').eq('expense_id',created.expense_id));assert.equal(files.length,3);assert.ok(files.every(f=>!f.payment_id&&f.expense_id===created.expense_id));paths.push(...files.map(f=>f.storage_path));
+const fresh=createClient(cfg.url,cfg.key,{auth:{persistSession:false,autoRefreshToken:false}});ok(await fresh.auth.signInWithPassword({email:cfg.users[0].email,password:cfg.password}));assert.equal(ok(await fresh.from('attachments').select('*').eq('expense_id',created.expense_id)).length,3)
+for(const f of files){const signed=ok(await fresh.storage.from(attachmentBucket).createSignedUrl(f.storage_path,60));const response=await fetch(signed.signedUrl);assert.equal(response.status,200);assert.ok((await response.arrayBuffer()).byteLength>0)}
+console.log('PASS real image/PDF uploads, fresh login and signed downloads')
+const pc={projectId:pid,requestId:crypto.randomUUID(),payload:{expense_id:created.expense_id,amount:120,paid_at:'2026-10-24',method:'現金'}};let lostRpc=true,lostUpload=true,lostInsert=true;
+const unreliable={rpc:async(...args)=>{const r=await c.rpc(...args);if(lostRpc&&!r.error){lostRpc=false;return{error:new Error('simulated lost committed payment response')}}return r},from(table){const q=c.from(table);if(table==='attachments'){const insert=q.insert.bind(q);q.insert=async(...args)=>{const r=await insert(...args);if(lostInsert&&!r.error){lostInsert=false;return{error:new Error('simulated lost insert response')}}return r}}return q},storage:{from(bucket){const s=c.storage.from(bucket);return{upload:async(...args)=>{const r=await s.upload(...args);if(lostUpload&&!r.error){lostUpload=false;return{error:new Error('simulated lost successful upload response')}}return r},remove:(...a)=>s.remove(...a)}}}}
+const paymentProofs=['pay.png','pay.pdf'].map(item);await assert.rejects(savePaymentProofs(unreliable,pc,paymentProofs),/lost committed/);await assert.rejects(savePaymentProofs(unreliable,pc,paymentProofs),/1 個附件未完成/);await savePaymentProofs(unreliable,pc,paymentProofs);assert.equal(ok(await c.from('payments').select('*').eq('expense_id',created.expense_id)).length,1);let paymentFiles=ok(await c.from('attachments').select('*').eq('payment_id',pc.paymentId));assert.equal(paymentFiles.length,2);paths.push(...paymentFiles.map(f=>f.storage_path));console.log('PASS lost payment/upload/insert responses and partial retry: one payment, two proofs')
+assert.deepEqual(ok(await clients[1].from('attachments').select('*').eq('project_id',pid)),[]);assert.deepEqual(ok(await clients[1].from('payments').select('*').eq('project_id',pid)),[]);assert.ok((await clients[1].storage.from(attachmentBucket).download(files[0].storage_path)).error);assert.ok((await c.from('attachments').insert({...files[0],id:crypto.randomUUID(),project_id:projects[1].id,storage_path:projects[1].id+'/'+crypto.randomUUID()+'.png'})).error);assert.ok((await c.from('attachments').insert({...files[0],id:crypto.randomUUID(),payment_id:pc.paymentId,storage_path:pid+'/'+crypto.randomUUID()+'.png'})).error);console.log('PASS outsider DB/Storage isolation, cross-book FK and exactly-one-parent constraint')
+await removePaymentAttachment(c,paymentFiles[0]);assert.equal(ok(await c.from('payments').select('*').eq('id',pc.paymentId)).length,1);assert.ok((await c.storage.from(attachmentBucket).download(paymentFiles[0].storage_path)).error);console.log('PASS deleting proof preserves payment and removes Storage file')
+await removePayment(c,pid,pc.paymentId,paymentFiles.slice(1));assert.deepEqual(ok(await c.from('attachments').select('*').eq('payment_id',pc.paymentId)),[]);assert.ok((await c.storage.from(attachmentBucket).download(paymentFiles[1].storage_path)).error);console.log('PASS deleting payment cascades proofs and removes Storage files')
+const receipts=['120','80','150'].map((amount,i)=>({id:crypto.randomUUID(),merchant:'shop '+i,amount,date:'2026-10-24',method:'現金',items:[item('receipt'+i+'.png')]}));const batch={projectId:pid,requestId:crypto.randomUUID(),payload:{title:'Synthetic gifts',receipts:receipts.map(({items,...r})=>({...r,amount:Number(r.amount)}))}};await saveReceiptBatch(c,batch,receipts);const eid=batch.result.expense_id;assert.equal(Number(ok(await c.from('expenses').select('total_amount').eq('id',eid).single()).total_amount),350);assert.equal(ok(await c.from('payments').select('*').eq('expense_id',eid)).reduce((n,p)=>n+Number(p.amount),0),350);const append={projectId:pid,requestId:crypto.randomUUID(),payload:{expense_id:eid,receipts:[{id:crypto.randomUUID(),amount:.3,date:'2026-10-24',merchant:'later',method:'PayMe'}]}};const added=ok(await c.rpc('finance_receipts_write',{p_project:pid,p_request:append.requestId,p_payload:append.payload}));assert.deepEqual(ok(await c.rpc('finance_receipts_write',{p_project:pid,p_request:append.requestId,p_payload:append.payload})),added);assert.equal(Number(ok(await c.from('expenses').select('total_amount').eq('id',eid).single()).total_amount),350.3);assert.equal(ok(await c.from('payments').select('*').eq('expense_id',eid)).reduce((n,p)=>n+Number(p.amount),0),350.3);console.log('PASS grouped purchases and later append increase both total/paid exactly once')
+fs.writeFileSync(path.join(artifactDir,'live-ready.json'),JSON.stringify({project:projects[0],expenseId:created.expense_id,files:files.map(f=>f.id)}),{mode:0o600});console.log('READY for authenticated browser check; cleanup required')
+}catch(e){console.error(e.message);process.exitCode=1}finally{for(const c of clients)await c.auth.signOut()}

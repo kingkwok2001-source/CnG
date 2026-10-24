@@ -1,21 +1,21 @@
-import React,{useContext,useEffect,useRef,useState} from 'react'
+import {useFormLeaveGuard} from './useFormLeaveGuard'
+import React,{useEffect,useRef,useState} from 'react'
 import {Camera,FileText,Plus,Trash2,X} from 'lucide-react'
 import {supabase} from './supabase'
 import {localToday,paymentMethods} from './transaction-parser'
 import {preparePaymentFile,maxPaymentFiles} from './payment-files'
 import {ProofViewer} from './PaymentProofs'
 import {receiptPayload,receiptTotal,receiptSuggestions,saveReceiptBatch} from './receipt-batch'
-import {SheetCloseContext} from './SheetCloseContext'
 import './receipt-batch.css'
 const blankReceipt=()=>({id:crypto.randomUUID(),merchant:'',amount:'',date:localToday(),method:'',items:[]})
 const money=(amount,currency)=>new Intl.NumberFormat('zh-HK',{style:'currency',currency}).format(amount)
 export default function ReceiptBatch({p,cats=[],expenses=[],expense=null,client=supabase,done}){
  const[rows,setRows]=useState(()=>[blankReceipt()]),[title,setTitle]=useState(''),[expenseId,setExpenseId]=useState(expense?.id||''),[category,setCategory]=useState(cats[0]?.id||''),[busy,setBusy]=useState(false),[preparing,setPreparing]=useState(false),[reading,setReading]=useState(''),[error,setError]=useState(''),[viewer,setViewer]=useState(null),[,render]=useState(0)
- const context=useRef({projectId:p.id,requestId:crypto.randomUUID()}),selected=useRef(rows),lock=useRef(false),mounted=useRef(true),worker=useRef(null),batchInput=useRef(null),rowInput=useRef(null),cameraInput=useRef(null),target=useRef(null),guard=useContext(SheetCloseContext)
+ const context=useRef({projectId:p.id,requestId:crypto.randomUUID()}),selected=useRef(rows),lock=useRef(false),mounted=useRef(true),worker=useRef(null),batchInput=useRef(null),rowInput=useRef(null),cameraInput=useRef(null),target=useRef(null)
  selected.current=rows
  const existing=expense||expenses.find(x=>x.id===expenseId),total=receiptTotal(rows),locked=busy||!!reading||!!context.current.started
  useEffect(()=>()=>{mounted.current=false;worker.current?.terminate();for(const row of selected.current)for(const item of row.items)URL.revokeObjectURL(item.url)},[])
- useEffect(()=>{if(!guard)return;const check=()=>{if(lock.current||preparing||reading)return false;const pending=selected.current.some(r=>r.amount||r.merchant||r.items.length);return !pending||confirm(context.current.result?'合併項目已儲存。關閉會放棄尚未上載嘅附件，繼續？':'未儲存嘅購買單會被移除，確定離開？')};guard.current=check;return()=>{if(guard.current===check)guard.current=null}},[guard,preparing,reading])
+ useFormLeaveGuard({values:[title,expenseId,category,rows.map(({items,...row})=>row)],busy:busy||preparing||!!reading,pending:rows.some(r=>r.items.some(x=>!x.saved)),committed:!!context.current.result,message:context.current.result?'合併項目已儲存，離開會放棄未上載附件，繼續？':'表格有未儲存購買單或附件，確定離開？'})
  const patch=(id,values)=>setRows(old=>old.map(row=>row.id===id?{...row,...values}:row))
  function removeRow(row){for(const item of row.items)URL.revokeObjectURL(item.url);setRows(old=>old.length===1?[blankReceipt()]:old.filter(x=>x.id!==row.id))}
  function removeFile(row,item){URL.revokeObjectURL(item.url);patch(row.id,{items:row.items.filter(x=>x.id!==item.id)})}

@@ -1,16 +1,15 @@
-import React,{useContext,useEffect,useRef,useState} from 'react'
+import {useFormLeaveGuard} from './useFormLeaveGuard'
+import React,{useEffect,useRef,useState} from 'react'
 import {supabase} from './supabase'
 import {paymentMethods,localToday,validDate} from './transaction-parser'
 import {receiptCents} from './receipt-batch'
 import {saveExpenseProofs} from './expense-files'
 import EvidencePicker from './EvidencePicker'
-import {SheetCloseContext} from './SheetCloseContext'
 export default function ExpenseComposer({p,cats,record,done,client=supabase}){
  const[title,setTitle]=useState(record?.title||''),[amount,setAmount]=useState(record?.total_amount||''),[category,setCategory]=useState(record?.category_id||cats[0]?.id||''),[paid,setPaid]=useState(''),[method,setMethod]=useState('現金'),[date,setDate]=useState(record?.expense_date||localToday()),[due,setDue]=useState(record?.due_date||''),[person,setPerson]=useState(record?.responsible_person||''),[notes,setNotes]=useState(record?.notes||''),[items,setItems]=useState([]),[busy,setBusy]=useState(false),[preparing,setPreparing]=useState(false),[error,setError]=useState(''),[,render]=useState(0)
- const context=useRef({projectId:p.id,requestId:crypto.randomUUID()}),saving=useRef(false),selected=useRef(items),mounted=useRef(true),guard=useContext(SheetCloseContext)
- selected.current=items
+ const context=useRef({projectId:p.id,requestId:crypto.randomUUID()}),saving=useRef(false),mounted=useRef(true)
  useEffect(()=>()=>{mounted.current=false},[])
- useEffect(()=>{if(!guard)return;const check=()=>!saving.current&&!preparing&&(!selected.current.some(x=>!x.saved)||confirm(context.current.expenseId?'支出已儲存，關閉會放棄未上載附件，繼續？':'未送出嘅入帳證明會被移除，確定離開？'));guard.current=check;return()=>{if(guard.current===check)guard.current=null}},[guard,preparing])
+ useFormLeaveGuard({values:[title,amount,category,paid,method,date,due,person,notes],busy:busy||preparing,pending:items.some(x=>!x.saved),committed:!!context.current.expenseId,message:context.current.expenseId?'支出已儲存，離開會放棄未上載附件，繼續？':'表格有未儲存資料或附件，確定離開？'})
  const locked=busy||!!context.current.started
  async function save(event){
   event.preventDefault();if(saving.current||preparing)return
