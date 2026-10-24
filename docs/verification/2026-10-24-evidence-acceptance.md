@@ -42,7 +42,7 @@ beforeunload 是瀏覽器提供的提示，iOS 強制關閉 App／系統終止�
 - `npm run build`、`git diff --check` 通過。
 - `tests/browser/evidence-flows.cjs`：390／1440 兩種寬度，每種七組流程，共十四組。
 - `tests/browser/leave-guard.cjs`：四種表格的 pristine／dirty navigation。
-- `tests/browser/payment-recovery.cjs`：兩個獨立審查發現，均觀察修正前失敗／修正後通過。此 harness 需要 Vite dev server。
+- `tests/browser/payment-recovery.cjs`：兩個獨立審查發現，均觀察修正前失敗／修正後通過（callback 失敗後保護、新付款未知結果後欄位鎖定）。此 harness 需要 Vite dev server。
 - `tests/browser/authenticated-evidence.cjs`：真實登入 UI、建立／修改／付款／刪除／重載／重新登入／新 context。
 - `tests/integration/live-evidence.mjs`：真實 API／Storage、回應遺失、RLS 及合併購買。
 - `tests/integration/cleanup-evidence.mjs`：只接受明確配置的 `finance-acceptance-...@example.invalid` 合成用戶；錯誤密碼不刪除，正確密碼刪除帳號、帳本、附件，舊 JWT 無權讀取，刪除後不能登入。
@@ -51,4 +51,14 @@ Playwright 由執行環境提供，repo 沒有新增產品依賴；執行環境�
 
 ## 部署／清理記錄
 
-新版部署及部署後重跑結果會在完成後補記。測試帳號 B 已透過現有 delete-account 實際刪除，cleanup_pending=false；帳號 A 保留至部署後驗證完成才清理。
+功能 release：`4abd080`，已推送 main，GitHub 的 Vercel status=success。正式網站 `/assets/index-9sxC2Bff.js` 與本機 build 一致。部署後重跑 390px／1440px 十四組附件流程、四種表格離開保護及真正登入 UI 全套均通過，包括有效 PDF 的 signed URL 200／內容讀取。
+
+正式站另通過首次七步圖像教學／重開、頭像上載後 reload、帳本 Logo 上載、CSV 範本／支出匯出、PDF 總覽實際 A4 輸出、分析分類 drill-down 關閉後保留分析頁。
+
+Vercel 詳細 deployment API 因連接器 scope 返回 403，因此未宣稱已掃描平台 build/runtime logs；部署證據來自 GitHub Vercel success、正式資產比對及正式站互動測試。
+
+兩個測試帳號均已透過原有 delete-account 實際刪除，cleanup_pending=false。最終 SQL 核對：3 個原有用戶、23 筆支出、25 筆付款、4 個附件、4 個 Storage 物件，與本次開始時原有財務資料數量一致；測試用戶 0，cleanup queue 沒有仍存在的待清理檔案。
+
+臨時 verify-payment-proofs 函數仍為上次停用的 version 6、verify_jwt=true；本次未更新／啟用或使用它。
+
+執行決策：保留既有架構及資料，只修復已重現問題；使用使用者已授權的 main 正式部署，不另加確認流程；實機 Safari、電郵及 Google consent 未有證據，明確保留未驗收。獨立審查兩個 Important 已修正，沒有延期 Minor。
