@@ -1,0 +1,2 @@
+# Local development tool only; not part of the deployed website.
+graphifyy[sql,mcp]==0.9.97

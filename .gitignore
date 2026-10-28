@@ -3,3 +3,6 @@ dist
 .env
 .env.local
 .vercel
+
+# Local code graph and cache (never deployed)
+graphify-out/
